@@ -1,0 +1,130 @@
+"""Routes for running pipeline experiments."""
+
+import time
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import GroundTruthNote, Experiment, StageResult
+from app.pipeline.runner import run_pipeline
+
+router = APIRouter(prefix="/api/experiments", tags=["experiments"])
+
+
+class RunRequest(BaseModel):
+    note_ids: list[int]
+    error_rates: list[float] = [0.0, 0.02, 0.05, 0.10, 0.15, 0.20]
+    error_type: str = "mixed"
+
+
+@router.post("/run")
+def run_experiments(req: RunRequest, db: Session = Depends(get_db)):
+    """Run the 4-stage pipeline for each note x error_rate combination."""
+    results = []
+
+    for note_id in req.note_ids:
+        note = db.query(GroundTruthNote).filter(GroundTruthNote.id == note_id).first()
+        if not note:
+            raise HTTPException(404, f"Note {note_id} not found")
+
+        for rate in req.error_rates:
+            exp = Experiment(
+                note_id=note_id,
+                error_rate=rate,
+                error_type=req.error_type,
+                status="running",
+            )
+            db.add(exp)
+            db.flush()
+
+            t0 = time.time()
+            result = run_pipeline(
+                ground_truth_text=note.true_text,
+                ground_truth_summary=note.true_summary,
+                ground_truth_topic=note.true_topic,
+                error_rate=rate,
+                error_type=req.error_type,
+            )
+            exp.run_time_seconds = round(time.time() - t0, 3)
+            exp.status = "completed"
+
+            # Store stage results
+            s = result["stages"]
+            stage_map = [
+                (1, "ocr", s["ocr"]),
+                (2, "spell_correction", s["spell_correction"]),
+                (3, "summarization", s["summarization"]),
+                (4, "classification", s["classification"]),
+            ]
+            for order, name, data in stage_map:
+                sr = StageResult(
+                    experiment_id=exp.id,
+                    stage_name=name,
+                    stage_order=order,
+                    output_text=data.get("text"),
+                    cer=data.get("cer"),
+                    wer=data.get("wer"),
+                    error_recovery_rate=data.get("recovery_pct"),
+                    corrections_made=data.get("corrections_made"),
+                    rouge_1=data.get("rouge_1"),
+                    rouge_2=data.get("rouge_2"),
+                    rouge_l=data.get("rouge_l"),
+                    topic_correct=data.get("topic_correct"),
+                    topic_confidence=data.get("confidence"),
+                    predicted_topic=data.get("predicted_topic"),
+                    all_scores=data.get("all_scores"),
+                    processing_time_ms=data.get("processing_time_ms"),
+                )
+                db.add(sr)
+
+            results.append({
+                "note_id":       note_id,
+                "error_rate":    rate,
+                "experiment_id": exp.id,
+                "status":        exp.status,
+            })
+
+    db.commit()
+    return {"status": "done", "total_runs": len(results), "results": results}
+
+
+@router.get("")
+def list_experiments(db: Session = Depends(get_db)):
+    """List all experiments with their stage results."""
+    experiments = (
+        db.query(Experiment)
+        .order_by(Experiment.created_at.desc())
+        .all()
+    )
+    return {
+        "experiments": [
+            {
+                "id":              e.id,
+                "note_id":         e.note_id,
+                "error_rate":      e.error_rate,
+                "error_type":      e.error_type,
+                "status":          e.status,
+                "run_time_seconds": e.run_time_seconds,
+                "created_at":      e.created_at.isoformat() if e.created_at else None,
+                "stage_results": [
+                    {
+                        "stage_name":     sr.stage_name,
+                        "stage_order":    sr.stage_order,
+                        "cer":            sr.cer,
+                        "wer":            sr.wer,
+                        "rouge_1":        sr.rouge_1,
+                        "rouge_2":        sr.rouge_2,
+                        "rouge_l":        sr.rouge_l,
+                        "topic_correct":  sr.topic_correct,
+                        "topic_confidence": sr.topic_confidence,
+                        "predicted_topic":  sr.predicted_topic,
+                        "error_recovery_rate": sr.error_recovery_rate,
+                        "corrections_made":    sr.corrections_made,
+                    }
+                    for sr in sorted(e.stage_results, key=lambda s: s.stage_order)
+                ],
+            }
+            for e in experiments
+        ]
+    }
