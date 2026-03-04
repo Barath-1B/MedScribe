@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+venv/
+.venv/
+
+# Database
+*.db
+
+# Node
+node_modules/
+frontend/dist/
+
+# Datasets (keep dataset-1, ignore 2 and 3)
+dataset-2/
+dataset-3/
+
+# Tesseract binary
+Tesseract/
+
+# OS
+.DS_Store
+__MACOSX/
+Thumbs.db
+
+# Old files
+results.csv
+clinbert-error-propagation.zip
+
+# Generated output
+output/
