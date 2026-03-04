@@ -1,0 +1,6 @@
+Dataset: Doctor's Handwritten Prescription BD Dataset
+Source:  https://www.kaggle.com/datasets/ (Bangladesh prescription dataset)
+Type:    Handwritten doctor prescription word images
+Count:   Training + Testing + Validation splits
+Format:  Cropped word images (PNG/JPG)
+Notes:   Real handwritten prescriptions from Bangladeshi doctors. Word-level segmented.

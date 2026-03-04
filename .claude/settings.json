@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://datasets-server.huggingface.co/rows?dataset=chaithanyakota%2F100-handwritten-medical-records&config=default&split=train&offset=0&length=2\")",
+      "Bash(curl -s \"https://datasets-server.huggingface.co/rows?dataset=chaithanyakota%2F100-handwritten-medical-records&config=default&split=train&offset=0&length=2\")",
+      "Bash(python -m json.tool)",
+      "Bash(python download.py)"
+    ]
+  }
+}

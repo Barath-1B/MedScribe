@@ -1,0 +1,6 @@
+Dataset: MIMIC-CXR (Medical Information Mart for Intensive Care - Chest X-Ray)
+Source:  https://physionet.org/content/mimic-cxr/
+Type:    Chest X-ray radiology reports and DICOM images
+Count:   Subset
+Format:  Text reports + DICOM images
+Notes:   Clinical radiology reports, not handwritten. Requires PhysioNet credentials.

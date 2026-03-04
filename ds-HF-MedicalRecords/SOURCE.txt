@@ -1,0 +1,6 @@
+Dataset: 100 Handwritten Medical Records
+Source:  https://huggingface.co/datasets/chaithanyakota/100-handwritten-medical-records
+Type:    Handwritten medical prescription images with medicine name labels
+Count:   100 documents
+Format:  JPG images + ground truth medicine names (JSON)
+Notes:   Free, public, no auth required. Real handwritten clinical prescriptions.

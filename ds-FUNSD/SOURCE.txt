@@ -1,0 +1,6 @@
+Dataset: FUNSD (Form Understanding in Noisy Scanned Documents)
+Source:  https://guillaumejaume.github.io/FUNSD/
+Type:    Scanned printed forms with annotations (bounding boxes + text)
+Count:   50 documents (training split)
+Format:  PNG images + JSON annotations
+Notes:   Used as primary OCR evaluation dataset. Not handwritten — printed form fields.
