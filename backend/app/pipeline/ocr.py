@@ -15,8 +15,8 @@ _LOCAL_TESSERACT = _PROJECT_ROOT / "Tesseract" / "tesseract.exe"
 if _LOCAL_TESSERACT.is_file():
     pytesseract.pytesseract.tesseract_cmd = str(_LOCAL_TESSERACT)
 
-DS1_IMAGES      = _PROJECT_ROOT / "dataset-1" / "dataset" / "testing_data" / "images"
-DS1_ANNOTATIONS = _PROJECT_ROOT / "dataset-1" / "dataset" / "testing_data" / "annotations"
+DS1_IMAGES      = _PROJECT_ROOT / "ds-FUNSD" / "dataset" / "testing_data" / "images"
+DS1_ANNOTATIONS = _PROJECT_ROOT / "ds-FUNSD" / "dataset" / "testing_data" / "annotations"
 
 
 def normalise(text: str) -> str:

@@ -4,7 +4,20 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://datasets-server.huggingface.co/rows?dataset=chaithanyakota%2F100-handwritten-medical-records&config=default&split=train&offset=0&length=2\")",
       "Bash(curl -s \"https://datasets-server.huggingface.co/rows?dataset=chaithanyakota%2F100-handwritten-medical-records&config=default&split=train&offset=0&length=2\")",
       "Bash(python -m json.tool)",
-      "Bash(python download.py)"
+      "Bash(python download.py)",
+      "Bash(python \"ds-HF-MedicalRecords/download.py\")",
+      "Bash(pip install -r requirements.txt)",
+      "Bash(timeout 10 python -c \"from app.main import app; print\\(''FastAPI app loaded OK''\\)\")",
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "Bash(python -m uvicorn app.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s http://localhost:8000/api/notes)",
+      "Bash(curl -s http://localhost:8000/api/degradation)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(npm install)",
+      "Bash(npx vite build)",
+      "Bash(curl -s -X POST http://localhost:8000/api/notes -F \"title=Test Clinical Note\" -F \"true_text=The patient was diagnosed with acute myocardial infarction and prescribed aspirin 81mg daily along with metoprolol 25mg twice daily. Echocardiogram showed reduced ejection fraction of 35 percent. Patient scheduled for cardiac catheterization next week.\" -F \"true_summary=Patient diagnosed with AMI, prescribed aspirin and metoprolol, echo showed EF 35%, cath scheduled.\" -F \"true_topic=cardiology\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/experiments/run -H \"Content-Type: application/json\" -d '{\"\"note_ids\"\":[1],\"\"error_rates\"\":[0.0,0.05,0.1,0.15,0.2],\"\"error_type\"\":\"\"mixed\"\"}')",
+      "Bash(curl -s http://localhost:8000/api/experiments)"
     ]
   }
 }

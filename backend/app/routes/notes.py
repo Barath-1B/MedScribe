@@ -13,27 +13,26 @@ router = APIRouter(prefix="/api/notes", tags=["notes"])
 def list_notes(db: Session = Depends(get_db)):
     """List all ground truth notes."""
     notes = db.query(GroundTruthNote).order_by(GroundTruthNote.created_at.desc()).all()
-    return {
-        "notes": [
-            {
-                "id":           n.id,
-                "title":        n.title,
-                "true_topic":   n.true_topic,
-                "subject_area": n.subject_area,
-                "word_count":   n.word_count,
-                "created_at":   n.created_at.isoformat() if n.created_at else None,
-            }
-            for n in notes
-        ]
-    }
+    return [
+        {
+            "id":           n.id,
+            "title":        n.title,
+            "true_text":    n.true_text,
+            "true_topic":   n.true_topic,
+            "subject_area": n.subject_area,
+            "word_count":   n.word_count,
+            "created_at":   n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in notes
+    ]
 
 
 @router.post("")
 def create_note(
     title: str = Form(...),
     true_text: str = Form(...),
-    true_summary: str = Form(...),
-    true_topic: str = Form(...),
+    true_summary: str = Form(""),
+    true_topic: str = Form(""),
     subject_area: str = Form(""),
     db: Session = Depends(get_db),
 ):

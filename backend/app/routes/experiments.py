@@ -86,7 +86,7 @@ def run_experiments(req: RunRequest, db: Session = Depends(get_db)):
             })
 
     db.commit()
-    return {"status": "done", "total_runs": len(results), "results": results}
+    return {"status": "done", "total_runs": len(results), "experiments": results}
 
 
 @router.get("")
@@ -97,34 +97,33 @@ def list_experiments(db: Session = Depends(get_db)):
         .order_by(Experiment.created_at.desc())
         .all()
     )
-    return {
-        "experiments": [
-            {
-                "id":              e.id,
-                "note_id":         e.note_id,
-                "error_rate":      e.error_rate,
-                "error_type":      e.error_type,
-                "status":          e.status,
-                "run_time_seconds": e.run_time_seconds,
-                "created_at":      e.created_at.isoformat() if e.created_at else None,
-                "stage_results": [
-                    {
-                        "stage_name":     sr.stage_name,
-                        "stage_order":    sr.stage_order,
-                        "cer":            sr.cer,
-                        "wer":            sr.wer,
-                        "rouge_1":        sr.rouge_1,
-                        "rouge_2":        sr.rouge_2,
-                        "rouge_l":        sr.rouge_l,
-                        "topic_correct":  sr.topic_correct,
-                        "topic_confidence": sr.topic_confidence,
-                        "predicted_topic":  sr.predicted_topic,
-                        "error_recovery_rate": sr.error_recovery_rate,
-                        "corrections_made":    sr.corrections_made,
-                    }
-                    for sr in sorted(e.stage_results, key=lambda s: s.stage_order)
-                ],
-            }
-            for e in experiments
-        ]
-    }
+    return [
+        {
+            "id":              e.id,
+            "note_id":         e.note_id,
+            "note_title":      e.note.title if e.note else "Unknown",
+            "error_rate":      e.error_rate,
+            "error_type":      e.error_type,
+            "status":          e.status,
+            "run_time_seconds": e.run_time_seconds,
+            "created_at":      e.created_at.isoformat() if e.created_at else None,
+            "stage_results": [
+                {
+                    "stage_name":     sr.stage_name,
+                    "stage_order":    sr.stage_order,
+                    "cer":            sr.cer,
+                    "wer":            sr.wer,
+                    "rouge_1":        sr.rouge_1,
+                    "rouge_2":        sr.rouge_2,
+                    "rouge_l":        sr.rouge_l,
+                    "topic_correct":  sr.topic_correct,
+                    "topic_confidence": sr.topic_confidence,
+                    "predicted_topic":  sr.predicted_topic,
+                    "error_recovery_rate": sr.error_recovery_rate,
+                    "corrections_made":    sr.corrections_made,
+                }
+                for sr in sorted(e.stage_results, key=lambda s: s.stage_order)
+            ],
+        }
+        for e in experiments
+    ]

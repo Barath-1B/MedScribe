@@ -1,64 +1,86 @@
 """
-Degradation service — loads pre-computed ClinBERT study data and aggregates.
-Ported from dashboard.py load_clinbert_data() + Tab 3 aggregation logic.
+Degradation service — computes snowball degradation from experiment results.
+Shows how OCR errors cascade through each pipeline stage.
 """
 
-from pathlib import Path
-from functools import lru_cache
+from collections import defaultdict
+from sqlalchemy.orm import Session
 
-import pandas as pd
-
-_PROJECT_ROOT = Path(__file__).parents[3]
-CLINBERT_CSV = (
-    _PROJECT_ROOT / "clinbert-error-propagation"
-    / "clinbert-error-propagation" / "results" / "full_results.csv"
-)
+from app.models import Experiment
 
 
-@lru_cache(maxsize=1)
-def load_clinbert_data() -> pd.DataFrame | None:
-    """Load the pre-computed degradation study CSV."""
-    if not CLINBERT_CSV.exists():
-        return None
-    df = pd.read_csv(CLINBERT_CSV)
-    df["error_pct"] = (df["error_rate"] * 100).round(0).astype(int)
-    return df
+def get_degradation_data(db: Session) -> dict:
+    """
+    Build degradation curves from completed experiments.
+    Groups by error_rate and stage, computing mean metrics at each point.
+    Returns flat aggregated list that the frontend can consume directly.
+    """
+    experiments = (
+        db.query(Experiment)
+        .filter(Experiment.status == "completed")
+        .all()
+    )
 
+    if not experiments:
+        return {"aggregated": [], "error_rates": [], "total_experiments": 0}
 
-def get_degradation_data() -> dict | None:
-    """Return raw + aggregated degradation data as JSON-serialisable dict."""
-    df = load_clinbert_data()
-    if df is None:
-        return None
+    # Collect all stage results grouped by (error_rate, stage_name)
+    buckets = defaultdict(lambda: defaultdict(list))
 
-    error_rates = sorted(df["error_pct"].unique().tolist())
+    for exp in experiments:
+        rate = exp.error_rate
+        for sr in exp.stage_results:
+            buckets[rate][sr.stage_name].append(sr)
 
-    # Aggregate by stage
-    ocr_agg = (df[df["stage_name"] == "ocr"]
-               .groupby("error_pct")[["cer", "wer"]].mean().reset_index())
-    spell_agg = (df[df["stage_name"] == "spell_correction"]
-                 .groupby("error_pct")[["cer", "wer", "error_recovery_rate"]].mean().reset_index())
-    summ_agg = (df[df["stage_name"] == "summarization"]
-                .groupby("error_pct")[["rouge_1", "rouge_2", "rouge_l"]].mean().reset_index())
-    cls_agg = (df[df["stage_name"] == "classification"]
-               .groupby("error_pct")[["topic_correct", "topic_confidence"]].mean().reset_index())
+    aggregated = []
+    error_rates = sorted(buckets.keys())
 
-    # Scale to percentages
-    for col in ["cer", "wer"]:
-        ocr_agg[col] = (ocr_agg[col] * 100).round(2)
-        spell_agg[col] = (spell_agg[col] * 100).round(2)
-    spell_agg["error_recovery_rate"] = (spell_agg["error_recovery_rate"] * 100).round(2)
-    for col in ["rouge_1", "rouge_2", "rouge_l"]:
-        summ_agg[col] = (summ_agg[col] * 100).round(2)
-    cls_agg["topic_correct"] = (cls_agg["topic_correct"] * 100).round(2)
-    cls_agg["topic_confidence"] = (cls_agg["topic_confidence"] * 100).round(2)
+    for rate in error_rates:
+        for stage_name in ["ocr", "spell_correction", "summarization", "classification"]:
+            results = buckets[rate].get(stage_name, [])
+            if not results:
+                continue
+
+            row = {
+                "error_rate": rate,
+                "stage": stage_name,
+                "n_runs": len(results),
+            }
+
+            # CER/WER for ocr and spell_correction stages
+            cers = [r.cer for r in results if r.cer is not None]
+            wers = [r.wer for r in results if r.wer is not None]
+            if cers:
+                row["mean_cer"] = round(sum(cers) / len(cers), 2)
+            if wers:
+                row["mean_wer"] = round(sum(wers) / len(wers), 2)
+
+            # Recovery rate for spell_correction
+            recoveries = [r.error_recovery_rate for r in results if r.error_recovery_rate is not None]
+            if recoveries:
+                row["mean_recovery"] = round(sum(recoveries) / len(recoveries), 2)
+
+            # ROUGE for summarization
+            r1s = [r.rouge_1 for r in results if r.rouge_1 is not None]
+            r2s = [r.rouge_2 for r in results if r.rouge_2 is not None]
+            rls = [r.rouge_l for r in results if r.rouge_l is not None]
+            if r1s:
+                row["mean_rouge_1"] = round(sum(r1s) / len(r1s), 2)
+                row["mean_rouge_2"] = round(sum(r2s) / len(r2s), 2)
+                row["mean_rouge_l"] = round(sum(rls) / len(rls), 2)
+
+            # Classification accuracy
+            corrects = [r.topic_correct for r in results if r.topic_correct is not None]
+            confs = [r.topic_confidence for r in results if r.topic_confidence is not None]
+            if corrects:
+                row["mean_accuracy"] = round(sum(corrects) / len(corrects) * 100, 2)
+            if confs:
+                row["mean_confidence"] = round(sum(confs) / len(confs), 4)
+
+            aggregated.append(row)
 
     return {
+        "aggregated": aggregated,
         "error_rates": error_rates,
-        "aggregated": {
-            "ocr":               ocr_agg.to_dict(orient="records"),
-            "spell_correction":  spell_agg.to_dict(orient="records"),
-            "summarization":     summ_agg.to_dict(orient="records"),
-            "classification":    cls_agg.to_dict(orient="records"),
-        },
+        "total_experiments": len(experiments),
     }

@@ -13,9 +13,12 @@ venv/
 node_modules/
 frontend/dist/
 
-# Datasets (keep dataset-1, ignore 2 and 3)
-dataset-2/
-dataset-3/
+# Datasets (keep ds-FUNSD, gitignore the rest — too large)
+ds-MIMIC-CXR/
+ds-PrescriptionBD/
+ds-HF-MedicalRecords/images/
+ds-HandwrittenRx/
+ds-DoctorHandwritingBD/
 
 # Tesseract binary
 Tesseract/
@@ -25,9 +28,9 @@ Tesseract/
 __MACOSX/
 Thumbs.db
 
-# Old files
-results.csv
-clinbert-error-propagation.zip
-
 # Generated output
 output/
+results.csv
+
+# MedScribe (separate project)
+MedScribe/
