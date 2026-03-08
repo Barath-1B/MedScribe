@@ -1,22 +1,32 @@
 """
-Analysis service — runs OCR evaluation on dataset-1 and caches results in DB.
-Ported from dashboard.py load_analysis() + KPI computations.
+Analysis service — runs TrOCR evaluation on handwritten prescription datasets
+(HF-MedicalRecords + DoctorHandwritingBD) and caches results in DB.
 """
+
+import logging
 
 import numpy as np
 from sqlalchemy.orm import Session
 
-from app.pipeline.ocr import DS1_IMAGES, DS1_ANNOTATIONS, gt_from_funsd_json, run_ocr
+from app.pipeline.ocr import (
+    DS_HF_IMAGES, DS_DOC_IMAGES,
+    load_hf_ground_truth, load_doctor_handwriting_gt, run_ocr,
+)
 from app.pipeline.metrics import cer, wer
 from app.models import Document
 
+log = logging.getLogger(__name__)
 
-def _build_record(img_path, ann_path) -> dict:
-    """Run OCR on one document and compute metrics."""
-    gt = gt_from_funsd_json(ann_path)
-    ocr_txt = run_ocr(img_path)
-    c_val, c_info = cer(gt, ocr_txt)
-    w_val, w_info = wer(gt, ocr_txt)
+
+def _build_record(img_path, gt_text: str) -> dict | None:
+    """Run OCR on one handwritten prescription and compute metrics against ground truth."""
+    ocr_txt = run_ocr(str(img_path), psm=6)
+
+    if not gt_text.strip():
+        return None
+
+    c_val, c_info = cer(gt_text, ocr_txt)
+    w_val, w_info = wer(gt_text, ocr_txt)
 
     ref_words = max(w_info.get("ref_words", 1), 1)
     avg_wl = max(c_info.get("ref_len", 1), 1) / ref_words
@@ -24,7 +34,7 @@ def _build_record(img_path, ann_path) -> dict:
     return {
         "filename":      img_path.name,
         "image_path":    str(img_path),
-        "ground_truth":  gt,
+        "ground_truth":  gt_text,
         "ocr_text":      ocr_txt,
         "cer":           round(c_val, 2),
         "wer":           round(w_val, 2),
@@ -43,28 +53,69 @@ def _build_record(img_path, ann_path) -> dict:
     }
 
 
+def _is_stale_cache(db: Session) -> bool:
+    """Check if cached documents have garbage OCR (Tesseract on handwriting → CER > 150%)."""
+    sample = db.query(Document).limit(10).all()
+    if not sample:
+        return False
+    bad_count = sum(1 for d in sample if d.cer > 150 or len((d.ocr_text or "").strip()) < 5)
+    return bad_count > len(sample) // 2
+
+
+def _collect_images() -> list[tuple]:
+    """Collect all (image_path, ground_truth_text) pairs from both datasets."""
+    items = []
+
+    # Dataset 1: HF-MedicalRecords (100 images)
+    for entry in load_hf_ground_truth():
+        img_path = DS_HF_IMAGES / entry["filename"]
+        if img_path.exists():
+            items.append((img_path, entry.get("medicines", "")))
+
+    # Dataset 2: DoctorHandwritingBD (89 images)
+    for entry in load_doctor_handwriting_gt():
+        img_path = DS_DOC_IMAGES / entry["filename"]
+        if img_path.exists():
+            items.append((img_path, entry.get("medicines", "")))
+
+    return items
+
+
 def get_all_documents(db: Session) -> list[dict]:
     """
-    Return cached analysis from DB. If empty, run OCR on all dataset-1 docs,
-    store in the documents table, and return them.
+    Return cached analysis from DB. If empty or stale (bad Tesseract output),
+    re-run OCR with TrOCR on both handwritten datasets (~189 images).
     """
     existing = db.query(Document).all()
-    if existing:
+    if existing and not _is_stale_cache(db):
         return [_doc_to_dict(d) for d in existing]
 
-    # First run — populate DB
-    image_files = sorted(DS1_IMAGES.glob("*.png"))
+    # Clear stale cache if present
+    if existing:
+        log.info("Clearing %d stale cached documents (re-running with TrOCR)", len(existing))
+        db.query(Document).delete()
+        db.commit()
+
+    # Populate from both datasets
+    items = _collect_images()
+    if not items:
+        return []
+
+    total = len(items)
+    log.info("Processing %d handwritten prescription images with TrOCR (this may take a while)...", total)
+
     records = []
-    for img_path in image_files:
-        ann_path = DS1_ANNOTATIONS / (img_path.stem + ".json")
-        if not ann_path.exists():
+    for i, (img_path, gt_text) in enumerate(items):
+        log.info("OCR %d/%d: %s", i + 1, total, img_path.name)
+        rec = _build_record(img_path, gt_text)
+        if rec is None:
             continue
-        rec = _build_record(img_path, ann_path)
         doc = Document(**rec)
         db.add(doc)
         records.append(rec)
 
     db.commit()
+    log.info("Done! %d documents processed and cached.", len(records))
     return records
 
 
@@ -82,12 +133,11 @@ def compute_overview(docs: list[dict]) -> dict:
     avg_acc = float(np.mean(accs))
     snowball = avg_wer / avg_cer if avg_cer else 0
 
-    p_word_correct = 1 - avg_wer / 100
+    p_word_correct = max(0, 1 - avg_wer / 100)
     line_err  = round((1 - p_word_correct ** 8)   * 100, 1)
     sent_err  = round((1 - p_word_correct ** 20)  * 100, 1)
     doc_err   = round((1 - p_word_correct ** 200)  * 100, 1)
 
-    # Trend line slope (CER → WER)
     if len(cers) > 1:
         m, _ = np.polyfit(cers, wers, 1)
         trend_slope = round(float(m), 2)
@@ -108,6 +158,7 @@ def compute_overview(docs: list[dict]) -> dict:
         },
         "trend_slope":     trend_slope,
         "total_documents": len(docs),
+        "dataset":         "Handwritten Prescriptions (HF-MedicalRecords + DoctorHandwritingBD)",
     }
 
 

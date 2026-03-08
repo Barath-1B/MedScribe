@@ -18,7 +18,7 @@ export default function Overview() {
     fetchJson('/api/analysis').then((r) => setDocs(r.documents));
   }, []);
 
-  if (!data || !docs) return <LoadingSpinner message="Running OCR analysis on 50 documents..." />;
+  if (!data || !docs) return <LoadingSpinner message="Running OCR analysis on handwritten prescriptions..." />;
 
   const p = data.propagation;
   const cascade = [
@@ -33,7 +33,7 @@ export default function Overview() {
     <>
       <h1 className="page-title">OCR Error Analysis — Clinical Texts</h1>
       <p className="page-subtitle">
-        Dataset: FUNSD clinical forms | {data.total_documents} documents | Tesseract OCR
+        {data.dataset || 'Handwritten Prescriptions'} | {data.total_documents} documents | Tesseract OCR
       </p>
 
       <div className="kpi-grid">
