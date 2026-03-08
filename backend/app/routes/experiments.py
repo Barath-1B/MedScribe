@@ -39,12 +39,15 @@ def run_experiments(req: RunRequest, db: Session = Depends(get_db)):
             db.flush()
 
             t0 = time.time()
+            # If note has real OCR text and error_rate is 0, use real OCR mode
+            use_real_ocr = note.ocr_text and rate == 0.0
             result = run_pipeline(
                 ground_truth_text=note.true_text,
-                ground_truth_summary=note.true_summary,
-                ground_truth_topic=note.true_topic,
+                ground_truth_summary=note.true_summary or "",
+                ground_truth_topic=note.true_topic or "",
                 error_rate=rate,
                 error_type=req.error_type,
+                ocr_text=note.ocr_text if use_real_ocr else None,
             )
             exp.run_time_seconds = round(time.time() - t0, 3)
             exp.status = "completed"
@@ -80,9 +83,11 @@ def run_experiments(req: RunRequest, db: Session = Depends(get_db)):
 
             results.append({
                 "note_id":       note_id,
+                "note_title":    note.title,
                 "error_rate":    rate,
                 "experiment_id": exp.id,
                 "status":        exp.status,
+                "mode":          "real_ocr" if use_real_ocr else "simulated",
             })
 
     db.commit()
@@ -105,6 +110,7 @@ def list_experiments(db: Session = Depends(get_db)):
             "error_rate":      e.error_rate,
             "error_type":      e.error_type,
             "status":          e.status,
+            "mode":            "real_ocr" if (e.note and e.note.ocr_text and e.error_rate == 0.0) else "simulated",
             "run_time_seconds": e.run_time_seconds,
             "created_at":      e.created_at.isoformat() if e.created_at else None,
             "stage_results": [

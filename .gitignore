@@ -28,6 +28,12 @@ Tesseract/
 __MACOSX/
 Thumbs.db
 
+# HuggingFace model cache (TrOCR ~1GB)
+.hf_cache/
+
+# Uploaded images
+backend/uploads/
+
 # Generated output
 output/
 results.csv

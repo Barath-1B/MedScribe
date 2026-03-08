@@ -42,6 +42,8 @@ class GroundTruthNote(Base):
     title         = Column(String(255), nullable=False)
     image_path    = Column(String(500), nullable=True)
     true_text     = Column(Text, nullable=False)
+    ocr_text      = Column(Text, nullable=True)
+    ocr_method    = Column(String(50), nullable=True)
     true_summary  = Column(Text, nullable=True, default="")
     true_topic    = Column(String(100), nullable=True, default="")
     subject_area  = Column(String(100), nullable=True)
