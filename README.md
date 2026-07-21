@@ -76,18 +76,6 @@ Serves on `http://localhost:5173` and proxies `/api` to `http://localhost:8000`.
 
 The clinical-scribe routes (`/api/patients`, `/api/review`) require a login. The **first** `POST /api/auth/register` becomes an `admin` automatically; every registration after that needs an admin Bearer token. Easiest path: register your first user from the app's Login page (register tab) before touching Patients or Review.
 
-## Configuration
-
-Env vars, all optional (defaults shown), read in `backend/app/config.py`:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `MEDSCRIBE_DATABASE_URL` | `sqlite:///backend/ocr_clinical.db` | SQLAlchemy DSN — set to a Postgres URL for deploy |
-| `MEDSCRIBE_REVIEW_CONF_THRESHOLD` | `0.80` | Extracted-field confidence floor below which a field is flagged for human review |
-| `MEDSCRIBE_JWT_SECRET` | *(unset)* | JWT signing secret. If unset, a dev secret is generated and persisted to `backend/.jwt_secret` — set this explicitly in production |
-| `MEDSCRIBE_JWT_EXPIRE_MINUTES` | `720` | JWT token lifetime |
-
-No `.env.example` is provided — set these directly in your shell or deploy environment.
 
 ## API overview
 
